@@ -31,4 +31,8 @@ Assets/
 - One component per file
 
 ## Design Notes
-> Add brainstorming notes, mechanics ideas, and references here.
+See `GDD.md` for the full Game Design Document.
+
+**Locked pillars:** persistent ship, shared universe, small crew (3–6), isometric pixel art, no story, pure systems, async PvP (planned).
+
+**References:** Pixel Starships, FTL, Eve Online (tone).
