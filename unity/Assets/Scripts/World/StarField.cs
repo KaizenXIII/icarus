@@ -1,129 +1,143 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Procedural infinite starfield with constellation lines.
-/// Attach to any GameObject. Stars recycle as the camera moves.
+/// Procedural starfield with faint constellation lines drawn via GL.
+/// Attach to any GameObject in the scene.
 /// </summary>
 public class StarField : MonoBehaviour
 {
-    [SerializeField] private int   _starCount        = 120;
-    [SerializeField] private float _fieldRadius      = 25f;
-    [SerializeField] private float _constellationDist = 4f;
-    [SerializeField] private int   _maxLines         = 40;
-    [SerializeField] private float _parallaxFactor   = 0.15f;
+    [SerializeField] private int   _starCount       = 150;
+    [SerializeField] private float _fieldRadius     = 30f;
+    [SerializeField] private float _parallaxFactor  = 0.12f;
+    [SerializeField] private float _constellationDist = 5f;
+    [SerializeField] private int   _maxLines        = 50;
 
-    private Camera          _cam;
-    private Transform       _camTransform;
-    private List<Transform> _stars        = new();
-    private List<LineRenderer> _lines     = new();
-    private Sprite          _starSprite;
+    private Transform _camTransform;
+
+    private struct StarData
+    {
+        public Vector2 LocalPos;
+        public float   Size;
+        public Color   Color;
+    }
+
+    private struct LineData
+    {
+        public Vector2 A, B;
+    }
+
+    private StarData[] _stars;
+    private LineData[] _lines;
+    private Material   _mat;
 
     private void Awake()
     {
-        _cam          = Camera.main;
-        _camTransform = _cam.transform;
-        _starSprite   = CreateStarSprite();
+        _camTransform = Camera.main?.transform ?? FindFirstObjectByType<Camera>()?.transform;
 
-        SpawnStars();
-        DrawConstellations();
+        // URP-safe material using hidden sprite shader
+        _mat = new Material(Shader.Find("Hidden/Internal-Colored"));
+        _mat.hideFlags = HideFlags.HideAndDontSave;
+        _mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+        _mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+        _mat.SetInt("_Cull",     (int)UnityEngine.Rendering.CullMode.Off);
+        _mat.SetInt("_ZWrite",   0);
+
+        GenerateStars();
+        GenerateLines();
     }
 
-    private void LateUpdate()
+    private void GenerateStars()
     {
-        // Parallax: background moves slower than camera
-        Vector3 camPos = _camTransform.position * _parallaxFactor;
-        transform.position = new Vector3(camPos.x, camPos.y, 1f);
-    }
-
-    // ── Star spawning ─────────────────────────────────────────────────────────
-
-    private void SpawnStars()
-    {
+        _stars = new StarData[_starCount];
         for (int i = 0; i < _starCount; i++)
         {
-            var go = new GameObject($"Star_{i}");
-            go.transform.SetParent(transform);
-
-            Vector2 pos  = Random.insideUnitCircle * _fieldRadius;
-            go.transform.localPosition = new Vector3(pos.x, pos.y, 0f);
-
-            var sr      = go.AddComponent<SpriteRenderer>();
-            sr.sprite   = _starSprite;
-            sr.sortingOrder = -10;
-
-            float size  = Random.Range(0.03f, 0.12f);
-            go.transform.localScale = Vector3.one * size;
-
-            float bright = Random.Range(0.55f, 1f);
-            sr.color = new Color(bright, bright, Random.Range(bright * 0.8f, 1f), 1f);
-
-            _stars.Add(go.transform);
-        }
-    }
-
-    private void DrawConstellations()
-    {
-        int lines = 0;
-        for (int i = 0; i < _stars.Count && lines < _maxLines; i++)
-        {
-            for (int j = i + 1; j < _stars.Count && lines < _maxLines; j++)
+            Vector2 pos   = Random.insideUnitCircle * _fieldRadius;
+            float   bright = Random.Range(0.5f, 1f);
+            float   blue   = Random.Range(0.8f, 1f);
+            _stars[i] = new StarData
             {
-                float dist = Vector3.Distance(
-                    _stars[i].localPosition,
-                    _stars[j].localPosition);
-
-                if (dist < _constellationDist)
-                {
-                    CreateLine(_stars[i].localPosition, _stars[j].localPosition);
-                    lines++;
-                }
-            }
+                LocalPos = pos,
+                Size     = Random.Range(0.04f, 0.14f),
+                Color    = new Color(bright * 0.85f, bright * 0.9f, blue, 1f)
+            };
         }
     }
 
-    private void CreateLine(Vector3 a, Vector3 b)
+    private void GenerateLines()
     {
-        var go = new GameObject("ConstellationLine");
-        go.transform.SetParent(transform);
-        go.transform.localPosition = Vector3.zero;
-
-        var lr               = go.AddComponent<LineRenderer>();
-        lr.positionCount     = 2;
-        lr.SetPosition(0, a);
-        lr.SetPosition(1, b);
-        lr.startWidth        = 0.015f;
-        lr.endWidth          = 0.015f;
-        lr.useWorldSpace     = false;
-        lr.sortingOrder      = -11;
-        lr.material          = new Material(Shader.Find("Sprites/Default"));
-        lr.startColor        = new Color(0.4f, 0.5f, 0.8f, 0.25f);
-        lr.endColor          = new Color(0.4f, 0.5f, 0.8f, 0.25f);
-
-        _lines.Add(lr);
+        var list = new System.Collections.Generic.List<LineData>();
+        for (int i = 0; i < _stars.Length && list.Count < _maxLines; i++)
+        for (int j = i + 1; j < _stars.Length && list.Count < _maxLines; j++)
+        {
+            if (Vector2.Distance(_stars[i].LocalPos, _stars[j].LocalPos) < _constellationDist)
+                list.Add(new LineData { A = _stars[i].LocalPos, B = _stars[j].LocalPos });
+        }
+        _lines = list.ToArray();
     }
 
-    // ── Sprite creation ───────────────────────────────────────────────────────
+    private void OnPostRender() => Draw();
 
-    private static Sprite CreateStarSprite()
+    // Also works with cameras that don't call OnPostRender on this object
+    private Camera _attachedCam;
+    private void Start()
     {
-        int size  = 4;
-        var tex   = new Texture2D(size, size, TextureFormat.RGBA32, false);
-        tex.filterMode = FilterMode.Point;
+        _attachedCam = Camera.main ?? FindFirstObjectByType<Camera>();
+        if (_attachedCam != null)
+            _attachedCam.GetComponent<UnityEngine.Camera>().cullingMask = ~0;
+    }
 
-        for (int y = 0; y < size; y++)
-        for (int x = 0; x < size; x++)
-            tex.SetPixel(x, y, Color.clear);
+    private void OnRenderObject() => Draw();
 
-        // Simple cross/dot
-        tex.SetPixel(1, 1, Color.white);
-        tex.SetPixel(2, 1, Color.white);
-        tex.SetPixel(1, 2, Color.white);
-        tex.SetPixel(2, 2, Color.white);
-        tex.Apply();
+    private bool _drawn;
+    private void LateUpdate() => _drawn = false;
 
-        return Sprite.Create(tex,
-            new Rect(0, 0, size, size),
-            new Vector2(0.5f, 0.5f), size);
+    private void Draw()
+    {
+        if (_drawn) return;
+        _drawn = true;
+
+        if (_mat == null || _stars == null) return;
+
+        // Parallax offset
+        Vector2 offset = _camTransform != null
+            ? (Vector2)_camTransform.position * _parallaxFactor
+            : Vector2.zero;
+
+        _mat.SetPass(0);
+        GL.PushMatrix();
+        GL.LoadProjectionMatrix(Camera.main.projectionMatrix);
+        GL.MultMatrix(Camera.main.worldToCameraMatrix);
+
+        // Draw constellation lines
+        GL.Begin(GL.LINES);
+        GL.Color(new Color(0.35f, 0.45f, 0.75f, 0.2f));
+        foreach (var line in _lines)
+        {
+            GL.Vertex3(line.A.x + offset.x, line.A.y + offset.y, 0f);
+            GL.Vertex3(line.B.x + offset.x, line.B.y + offset.y, 0f);
+        }
+        GL.End();
+
+        // Draw stars as quads
+        GL.Begin(GL.QUADS);
+        foreach (var star in _stars)
+        {
+            float s  = star.Size;
+            float px = star.LocalPos.x + offset.x;
+            float py = star.LocalPos.y + offset.y;
+            GL.Color(star.Color);
+            GL.Vertex3(px - s, py - s, 0f);
+            GL.Vertex3(px + s, py - s, 0f);
+            GL.Vertex3(px + s, py + s, 0f);
+            GL.Vertex3(px - s, py + s, 0f);
+        }
+        GL.End();
+
+        GL.PopMatrix();
+    }
+
+    private void OnDestroy()
+    {
+        if (_mat != null) Destroy(_mat);
     }
 }

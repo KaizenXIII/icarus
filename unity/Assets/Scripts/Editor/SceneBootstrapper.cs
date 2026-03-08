@@ -14,7 +14,7 @@ public static class SceneBootstrapper
     private const string TileAssetPath  = "Assets/Tilemaps/GroundTile.asset";
     private const string ShipSpritePath = "Assets/Sprites/Ship_Triangle.png";
     private const string TileSpriteDir  = "Assets/Sprites";
-    private const string SetupDoneKey   = "Icarus_SceneSetupDone";
+    private const string SetupDoneKey   = "Icarus_SceneSetupDone_v2"; // bump to force re-run
 
     static SceneBootstrapper()
     {
@@ -147,11 +147,7 @@ public static class SceneBootstrapper
     private static Sprite GetOrCreateTriangleShipSprite()
     {
         Directory.CreateDirectory(TileSpriteDir);
-
-        // Regenerate if missing
-        if (!File.Exists(ShipSpritePath))
-            GenerateTriangleShipPng(ShipSpritePath);
-
+        GenerateTriangleShipPng(ShipSpritePath); // always regenerate
         return AssetDatabase.LoadAssetAtPath<Sprite>(ShipSpritePath);
     }
 
