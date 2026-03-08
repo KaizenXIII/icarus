@@ -1,16 +1,34 @@
 using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using System.IO;
 
 /// <summary>
-/// Run via: Icarus > Setup Scene
-/// Builds the entire prototype scene from scratch.
+/// Auto-runs on script compilation via [InitializeOnLoadMethod].
+/// Also available via: Icarus > Setup Scene
 /// </summary>
+[InitializeOnLoad]
 public static class SceneBootstrapper
 {
     private const string TileAssetPath = "Assets/Tilemaps/GroundTile.asset";
     private const string TileSpriteDir = "Assets/Sprites";
+    private const string SetupDoneKey  = "Icarus_SceneSetupDone";
+
+    static SceneBootstrapper()
+    {
+        // Delay until editor is fully ready
+        EditorApplication.delayCall += AutoSetup;
+    }
+
+    private static void AutoSetup()
+    {
+        if (SessionState.GetBool(SetupDoneKey, false)) return;
+        if (EditorApplication.isPlayingOrWillChangePlaymode) return;
+
+        SetupScene();
+        SessionState.SetBool(SetupDoneKey, true);
+    }
 
     [MenuItem("Icarus/Setup Scene")]
     public static void SetupScene()
@@ -22,6 +40,7 @@ public static class SceneBootstrapper
         SetupCamera(ship.transform);
         EnsureGroundTileAssigned(grid);
 
+        EditorSceneManager.SaveOpenScenes();
         Debug.Log("[Icarus] Scene setup complete. Hit Play!");
     }
 
