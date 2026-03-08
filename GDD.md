@@ -166,19 +166,28 @@ Late Game
 
 ## 10. Open Questions
 
-- [ ] Permadeath for crew? Morale system?
-- [ ] Is there a faction/reputation system at stations?
 - [ ] How are players visible to each other on the map?
 - [ ] Void zone — what makes it distinct?
-- [ ] Monetization model
-- [ ] Platform targets (PC, mobile, both?)
-- [ ] Multiplayer backend (Photon, Mirror, custom?)
+
+## 11. Decisions Log
+
+| Decision | Choice | Notes |
+|----------|--------|-------|
+| Crew permadeath | No | Crew is persistent |
+| Morale system | Deferred | Not in scope yet |
+| Faction/reputation | No | Out of scope |
+| Monetization | None | Not in scope |
+| Multiplayer backend | Deferred | Local dev first |
+| Platform | PC | Local development target |
 
 ---
 
-## 11. Out of Scope (for now)
+## 12. Out of Scope (for now)
 
 - Multiple ships / fleet management
 - Real-time PvP
 - Story / narrative
 - NPC factions with quests
+- Monetization
+- Multiplayer backend
+- Mobile platform
