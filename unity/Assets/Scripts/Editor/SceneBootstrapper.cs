@@ -1,20 +1,17 @@
 using UnityEngine;
-using UnityEngine.Tilemaps;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using System.IO;
 
 /// <summary>
-/// Auto-runs on script compilation via [InitializeOnLoad].
-/// Also available via: Icarus > Setup Scene
+/// Auto-runs on script compilation. Also: Icarus > Setup Scene
 /// </summary>
 [InitializeOnLoad]
 public static class SceneBootstrapper
 {
-    private const string TileAssetPath  = "Assets/Tilemaps/GroundTile.asset";
     private const string ShipSpritePath = "Assets/Sprites/Ship_Triangle.png";
     private const string TileSpriteDir  = "Assets/Sprites";
-    private const string SetupDoneKey   = "Icarus_SceneSetupDone_v2"; // bump to force re-run
+    private const string SetupDoneKey   = "Icarus_SceneSetupDone_v3";
 
     static SceneBootstrapper()
     {
@@ -25,7 +22,6 @@ public static class SceneBootstrapper
     {
         if (SessionState.GetBool(SetupDoneKey, false)) return;
         if (EditorApplication.isPlayingOrWillChangePlaymode) return;
-
         SetupScene();
         SessionState.SetBool(SetupDoneKey, true);
     }
@@ -35,165 +31,125 @@ public static class SceneBootstrapper
     {
         SessionState.EraseBool(SetupDoneKey);
         ClearScene();
-        SetCameraBackground();
+        SetupCamera();
         CreateGameManager();
         CreateStarField();
-        CreateIsometricGrid();
         var ship = CreateShip();
-        SetupCamera(ship.transform);
+        WireCameraFollow(ship.transform);
 
         EditorSceneManager.SaveOpenScenes();
         Debug.Log("[Icarus] Scene setup complete. Hit Play!");
     }
 
-    // ── Scene setup ───────────────────────────────────────────────────────────
+    // ── Scene ─────────────────────────────────────────────────────────────────
 
     private static void ClearScene()
     {
-        string[] names = { "GameManager", "Grid", "Ship", "StarField" };
-        foreach (var name in names)
+        foreach (var name in new[] { "GameManager", "Grid", "Ship", "StarField" })
         {
             var go = GameObject.Find(name);
             if (go != null) Object.DestroyImmediate(go);
         }
     }
 
-    private static void SetCameraBackground()
+    private static void SetupCamera()
     {
         var cam = Camera.main;
         if (cam == null) return;
-        cam.backgroundColor     = new Color(0.03f, 0.03f, 0.08f); // deep space dark
-        cam.clearFlags          = CameraClearFlags.SolidColor;
-        cam.orthographicSize    = 8f;
+        cam.backgroundColor  = new Color(0.02f, 0.02f, 0.06f);
+        cam.clearFlags       = CameraClearFlags.SolidColor;
+        cam.orthographicSize = 8f;
+        cam.transform.position = new Vector3(0f, 0f, -10f);
     }
 
     private static void CreateGameManager()
     {
-        var go = new GameObject("GameManager");
-        go.AddComponent<GameManager>();
+        new GameObject("GameManager").AddComponent<GameManager>();
     }
 
     private static void CreateStarField()
     {
-        var go = new GameObject("StarField");
-        go.AddComponent<StarField>();
-    }
-
-    private static void CreateIsometricGrid()
-    {
-        var gridGo = new GameObject("Grid");
-        var grid   = gridGo.AddComponent<Grid>();
-        grid.cellLayout = GridLayout.CellLayout.Isometric;
-        grid.cellSize   = new Vector3(1f, 0.5f, 1f);
-
-        var tilemapGo       = new GameObject("Tilemap");
-        tilemapGo.transform.SetParent(gridGo.transform);
-        var tilemap         = tilemapGo.AddComponent<Tilemap>();
-        var tilemapRenderer = tilemapGo.AddComponent<TilemapRenderer>();
-        tilemapRenderer.sortOrder   = TilemapRenderer.SortOrder.BottomLeft;
-        tilemapRenderer.sortingOrder = 0;
-
-        var worldGrid    = gridGo.AddComponent<WorldGrid>();
-        SetPrivateField(worldGrid, "_tilemap", tilemap);
-        SetPrivateField(worldGrid, "_tile", GetOrCreateGroundTile());
+        new GameObject("StarField").AddComponent<StarField>();
     }
 
     private static GameObject CreateShip()
     {
+        GenerateTriangleShipPng(ShipSpritePath);
+        var sprite = AssetDatabase.LoadAssetAtPath<Sprite>(ShipSpritePath);
+
         var go = new GameObject("Ship");
+        go.transform.position   = Vector3.zero;
+        go.transform.localScale = Vector3.one * 0.5f;
 
         var sr          = go.AddComponent<SpriteRenderer>();
-        sr.sprite       = GetOrCreateTriangleShipSprite();
+        sr.sprite       = sprite;
         sr.sortingOrder = 10;
 
-        var rb                       = go.AddComponent<Rigidbody2D>();
-        rb.gravityScale              = 0f;
-        rb.freezeRotation            = true;
-        rb.collisionDetectionMode    = CollisionDetectionMode2D.Continuous;
+        var rb                    = go.AddComponent<Rigidbody2D>();
+        rb.gravityScale           = 0f;
+        rb.freezeRotation         = true;
+        rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
 
         go.AddComponent<ShipController>();
-        go.transform.position = Vector3.zero;
         return go;
     }
 
-    private static void SetupCamera(Transform target)
+    private static void WireCameraFollow(Transform target)
     {
-        var cam = Camera.main?.gameObject ?? new GameObject("Main Camera");
-        cam.tag = "MainCamera";
-        if (cam.GetComponent<Camera>() == null) cam.AddComponent<Camera>();
-        cam.transform.position = new Vector3(0f, 0f, -10f);
-
+        var cam    = Camera.main?.gameObject;
+        if (cam == null) return;
         var follow = cam.GetComponent<CameraFollow>() ?? cam.AddComponent<CameraFollow>();
-        SetPrivateField(follow, "_target", target);
+        typeof(CameraFollow)
+            .GetField("_target", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)
+            ?.SetValue(follow, target);
     }
 
-    // ── Asset creation ────────────────────────────────────────────────────────
-
-    private static Tile GetOrCreateGroundTile()
-    {
-        var tile = AssetDatabase.LoadAssetAtPath<Tile>(TileAssetPath);
-        if (tile != null) return tile;
-
-        Directory.CreateDirectory(Path.GetDirectoryName(TileAssetPath)!);
-        tile        = ScriptableObject.CreateInstance<Tile>();
-        tile.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
-        tile.color  = new Color(0.08f, 0.15f, 0.25f); // dark space-blue
-
-        AssetDatabase.CreateAsset(tile, TileAssetPath);
-        AssetDatabase.SaveAssets();
-        return tile;
-    }
-
-    private static Sprite GetOrCreateTriangleShipSprite()
-    {
-        Directory.CreateDirectory(TileSpriteDir);
-        GenerateTriangleShipPng(ShipSpritePath); // always regenerate
-        return AssetDatabase.LoadAssetAtPath<Sprite>(ShipSpritePath);
-    }
+    // ── Ship sprite ───────────────────────────────────────────────────────────
 
     private static void GenerateTriangleShipPng(string path)
     {
-        int size = 32;
+        Directory.CreateDirectory(TileSpriteDir);
+
+        int size = 64;
         var tex  = new Texture2D(size, size, TextureFormat.RGBA32, false);
         tex.filterMode = FilterMode.Point;
 
-        // Clear to transparent
         for (int y = 0; y < size; y++)
         for (int x = 0; x < size; x++)
             tex.SetPixel(x, y, Color.clear);
 
-        // Orange triangle pointing up
-        // Tip at top-center, base at bottom
-        var orange      = new Color(1f, 0.45f, 0.1f);
-        var orangeDark  = new Color(0.7f, 0.28f, 0.05f);
+        var orange     = new Color(1f,   0.5f,  0.1f,  1f);
+        var orangeEdge = new Color(0.8f, 0.3f,  0.05f, 1f);
+        var glow       = new Color(1f,   0.85f, 0.3f,  1f);
 
-        for (int y = 2; y < size - 2; y++)
+        int tip     = size - 4;   // y of tip (top)
+        int baseY   = 4;          // y of base (bottom)
+        int cx      = size / 2;
+
+        for (int y = baseY; y <= tip; y++)
         {
-            float t        = (float)(y - 2) / (size - 4);   // 0=bottom, 1=top
-            float halfWidth = Mathf.Lerp(size / 2f - 1f, 0.5f, t);
-            int   cx       = size / 2;
-            int   left     = Mathf.RoundToInt(cx - halfWidth);
-            int   right    = Mathf.RoundToInt(cx + halfWidth);
+            float t         = (float)(y - baseY) / (tip - baseY); // 0=base, 1=tip
+            float halfWidth = Mathf.Lerp(size / 2f - 4f, 1f, t);
+            int   left      = Mathf.RoundToInt(cx - halfWidth);
+            int   right     = Mathf.RoundToInt(cx + halfWidth);
 
             for (int x = left; x <= right; x++)
             {
-                bool isEdge = (x == left || x == right || y == 2);
-                tex.SetPixel(x, y, isEdge ? orangeDark : orange);
+                bool edge = x == left || x == right || y == baseY;
+                tex.SetPixel(x, y, edge ? orangeEdge : orange);
             }
         }
 
-        // Engine glow at base (bottom 4 rows)
-        var glow = new Color(1f, 0.75f, 0.2f, 0.8f);
-        for (int y = 2; y < 6; y++)
+        // Engine glow — two bright dots at base
+        for (int y = baseY; y < baseY + 8; y++)
         {
-            float t        = (float)(y - 2) / (size - 4);
-            float halfWidth = Mathf.Lerp(size / 2f - 1f, 0.5f, t);
-            int   cx       = size / 2;
-            int   cx1      = cx - 3, cx2 = cx + 3;
-            if (cx1 >= (int)(cx - halfWidth) && cx1 <= (int)(cx + halfWidth))
-                tex.SetPixel(cx1, y, glow);
-            if (cx2 >= (int)(cx - halfWidth) && cx2 <= (int)(cx + halfWidth))
-                tex.SetPixel(cx2, y, glow);
+            float t         = (float)(y - baseY) / (tip - baseY);
+            float halfWidth = Mathf.Lerp(size / 2f - 4f, 1f, t);
+            int   left      = Mathf.RoundToInt(cx - halfWidth);
+            int   right     = Mathf.RoundToInt(cx + halfWidth);
+            int   g1 = cx - 4, g2 = cx + 4;
+            if (g1 >= left && g1 <= right) tex.SetPixel(g1, y, glow);
+            if (g2 >= left && g2 <= right) tex.SetPixel(g2, y, glow);
         }
 
         tex.Apply();
@@ -201,22 +157,11 @@ public static class SceneBootstrapper
         Object.DestroyImmediate(tex);
 
         AssetDatabase.ImportAsset(path);
-        var importer = (TextureImporter)AssetImporter.GetAtPath(path);
-        importer.textureType         = TextureImporterType.Sprite;
-        importer.spritePixelsPerUnit = 32;
-        importer.filterMode          = FilterMode.Point;
-        importer.textureCompression  = TextureImporterCompression.Uncompressed;
-        importer.SaveAndReimport();
-    }
-
-    // ── Reflection helper ─────────────────────────────────────────────────────
-
-    private static void SetPrivateField(object obj, string fieldName, object value)
-    {
-        obj.GetType()
-           .GetField(fieldName,
-               System.Reflection.BindingFlags.NonPublic |
-               System.Reflection.BindingFlags.Instance)
-           ?.SetValue(obj, value);
+        var imp = (TextureImporter)AssetImporter.GetAtPath(path);
+        imp.textureType         = TextureImporterType.Sprite;
+        imp.spritePixelsPerUnit = 64;
+        imp.filterMode          = FilterMode.Point;
+        imp.textureCompression  = TextureImporterCompression.Uncompressed;
+        imp.SaveAndReimport();
     }
 }
