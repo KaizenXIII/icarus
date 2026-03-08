@@ -15,14 +15,27 @@ Brainstorming phase — no implementation yet.
 - Language: C#
 - Art style: Pixel art, isometric perspective
 
-## Project Structure (planned)
+## Project Structure
 ```
-Assets/
-  Scripts/
-  Sprites/
-  Scenes/
-  Prefabs/
-  Audio/
+icarus/
+  unity/                        ← Unity project root
+    Assets/
+      Scripts/
+        Core/                   ← Game loop, managers
+        Ship/                   ← Ship systems, modules
+        Crew/                   ← Crew logic
+        World/                  ← Sectors, map, spawning
+        Combat/                 ← PvE combat
+        UI/                     ← HUD, menus
+      Sprites/
+      Scenes/
+      Prefabs/
+      Tilemaps/
+      Audio/
+      ScriptableObjects/
+  CLAUDE.md
+  GDD.md
+  README.md
 ```
 
 ## Conventions
