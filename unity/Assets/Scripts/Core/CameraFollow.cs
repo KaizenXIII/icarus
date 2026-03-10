@@ -11,6 +11,8 @@ public class CameraFollow : MonoBehaviour
         if (_target == null) return;
 
         Vector3 desired = _target.position + _offset;
-        transform.position = Vector3.Lerp(transform.position, desired, _smoothSpeed * Time.deltaTime);
+        // Exponential decay: framerate-independent smoothing
+        float t = 1f - Mathf.Exp(-_smoothSpeed * Time.deltaTime);
+        transform.position = Vector3.Lerp(transform.position, desired, t);
     }
 }

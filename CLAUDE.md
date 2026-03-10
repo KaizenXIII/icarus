@@ -3,7 +3,7 @@
 Isometric pixel art spaceship game built in Unity.
 
 ## Project Status
-Brainstorming phase — no implementation yet.
+Early prototype — basic ship movement, starfield, isometric grid, and scene bootstrapping are working.
 
 ## Concept
 - Genre: Isometric pixel art space game
@@ -11,9 +11,11 @@ Brainstorming phase — no implementation yet.
 - Theme: TBD (named after Icarus — hubris, space exploration, sun, etc.)
 
 ## Tech Stack
-- Engine: Unity (version TBD)
+- Engine: Unity 6000.0.54f1
+- Render Pipeline: URP 17.0.4
+- Input: New Input System 1.14.1
 - Language: C#
-- Art style: Pixel art, isometric perspective
+- Art style: Pixel art, isometric perspective (32 PPU, 640x360 reference)
 
 ## Project Structure
 ```

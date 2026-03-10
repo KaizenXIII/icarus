@@ -4,6 +4,8 @@ using UnityEngine.InputSystem;
 public class ShipController : MonoBehaviour
 {
     [SerializeField] private ShipData _data;
+    [SerializeField] private float _acceleration = 12f;
+    [SerializeField] private float _deceleration = 8f;
 
     // Isometric axis vectors
     private static readonly Vector2 IsoRight = new Vector2( 1f,  0.5f).normalized;
@@ -12,6 +14,7 @@ public class ShipController : MonoBehaviour
     private Rigidbody2D _rb;
     private InputAction _moveAction;
     private Vector2     _input;
+    private Vector2     _currentVelocity;
 
     private void Awake()
     {
@@ -38,9 +41,17 @@ public class ShipController : MonoBehaviour
 
     private void FixedUpdate()
     {
-        float speed = _data != null ? _data.MoveSpeed : 3f;
-        Vector2 move = (_input.x * IsoRight + _input.y * IsoUp).normalized * speed;
-        _rb.linearVelocity = move;
+        float maxSpeed = _data != null ? _data.MoveSpeed : 3f;
+        Vector2 targetVelocity = Vector2.zero;
+
+        if (_input.sqrMagnitude > 0.01f)
+        {
+            targetVelocity = (_input.x * IsoRight + _input.y * IsoUp).normalized * maxSpeed;
+        }
+
+        float rate = targetVelocity.sqrMagnitude > 0.01f ? _acceleration : _deceleration;
+        _currentVelocity = Vector2.MoveTowards(_currentVelocity, targetVelocity, rate * Time.fixedDeltaTime);
+        _rb.linearVelocity = _currentVelocity;
     }
 
     private void OnDestroy()

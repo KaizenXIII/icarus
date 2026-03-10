@@ -248,6 +248,8 @@ public static class SceneBootstrapper
         var sc = go.AddComponent<ShipController>();
         SetField(sc, "_data", GetOrCreateShipData());
 
+        go.AddComponent<EngineGlow>();
+
         return go;
     }
 
